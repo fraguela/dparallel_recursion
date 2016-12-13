@@ -1,0 +1,8 @@
+namespace dpr {
+/**
+\mainpage Dparallel_recursion library
+
+This library provides skeletons for the Divide-and-Conquer (D&C) pattern of parallelism in shared, distributed and hybrid memory systems.
+
+**/
+}
