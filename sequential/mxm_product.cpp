@@ -1,6 +1,6 @@
 /*
  dparallel_recursion: distributed parallel_recursion skeleton
- Copyright (C) 2015-2016 Carlos H. Gonzalez, Basilio B. Fraguela. Universidade da Coruna
+ Copyright (C) 2015-2018 Carlos H. Gonzalez, Basilio B. Fraguela. Universidade da Coruna
  
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ void mxm(const MMatrix& a, const MMatrix& b, MMatrix& c)
 
 #else
 
+#ifndef NOBOOST
+
 #define BOOST_UBLAS_SHALLOW_ARRAY_ADAPTOR
 #define BOOST_UBLAS_NDEBUG
 
@@ -58,5 +60,24 @@ void mxm(const MMatrix& a, const MMatrix& b, MMatrix& c)
   
   axpy_prod(mra, mrb, mrc, true);
 }
+
+#else
+
+void mxm(const MMatrix& a, const MMatrix& b, MMatrix& c)
+{
+  const int common_dim = a.cols();
+  assert(common_dim == b.rows());
+  for (int i = 0; i < c.rows(); i++) {
+    for (int j = 0; j < c.cols(); j++) {
+      double r = 0.0;
+      for (int k = 0; k < common_dim; k++) {
+        r += a(i, k) * b(k, j);
+      }
+      c(i, j) = r;
+    }
+  }
+}
+
+#endif
 
 #endif

@@ -1,7 +1,11 @@
 ## Dparallel_recursion </p>
 
-This library provides a framework to parallelize algorithms that follow a divide-and-conquer pattern. Its two main components are the skeletons `parallel_recursion` and `dparallel_recursion`. The first one parallelizes the required algorithm using multithreading within a single process. The second skeleton supports the parallelization across hybrid memory environments such as clusters of nodes with multi-core processors, as it supports also multiple processes on top of the MPI standard.
+This library provides a framework to parallelize algorithms that follow a divide-and-conquer pattern. Its two main components are the skeletons `parallel_recursion` and `dparallel_recursion`. The first one parallelizes the required algorithm using multithreading within a single process. The second skeleton supports the parallelization across hybrid memory environments such as clusters of nodes with multi-core processors as well as multiple processes on top of the MPI standard.
 
+### Installation
+
+ Please read the accompanying `INSTALL.md` file.
+ 
 ### Examples and documentation
 
 - The `benchmarks` and `tests` directories contain implementations of algorithms with very different nature using the library and execising all its features.
@@ -10,7 +14,7 @@ This library provides a framework to parallelize algorithms that follow a divide
 
 - The `parallel_recursion` skeleton and its supporting classes are described and compared with other alternatives in the publication [A Generic Algorithm Template for Divide-and-conquer in Multicore Systems](http://www.des.udc.es/~basilio/papers/hpcc10.pdf) ([DOI 10.1109/HPCC.2010.24](http://dx.doi.org/10.1109/HPCC.2010.24)).
 
-- A paper describing the `dparallel_recursion` skeleton is currently under review.
+- The `dparallel_recursion` skeleton is described and compared with other alternatives in the publication [A general and efficient divide-and-conquer algorithm framework for multi-core clusters](http://www.des.udc.es/~basilio/papers/Gonzalez17-cluster.pdf) ([DOI 10.1007/s10586-017-0766-y](http://dx.doi.org/10.1007/s10586-017-0766-y)).
 
 ### License
 

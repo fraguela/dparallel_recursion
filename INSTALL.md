@@ -7,8 +7,9 @@
  * A C++ compiler that supports C++11 (g++ 5.2.1, g++ 6.1, and Apple LLVM 7.0.2 have been tested)
  * [CMake](https://cmake.org) 2.8.12.2 or above (3.1.3 for Mac OS X)
  * [Intel® Threading Building Blocks (TBB)](http://threadingbuildingblocks.org) v3.0 update 6 or above (v4.3 update 6 for Mac OS X)
- * Any MPI implementation with `MPI_THREAD_SERIALIZED` support for threading.
- * [Boost](http://www.boost.org) v1.41 or above
+ * If the distributed memory skeleton is to be used:
+ 	* Any MPI implementation with `MPI_THREAD_SERIALIZED` support for threading.
+ 	* [Boost](http://www.boost.org) v1.41 or above
  * Optional: [Doxygen](http://www.doxygen.org) for building its documentation
 
 ### Setting up Intel TBB </p>
@@ -46,11 +47,13 @@ Intel TBB must be configured before building or using Dparallel_recursion. This 
 
 		mkdir build && cd build
 
-4. Generate the files for building the benchmaks and tests for the library in the format that you prefer (Visual Studio projects, nmake makefiles, UNIX makefiles, Mac Xcode projects, ...) using cmake.
+4. Generate the files for building the benchmaks and tests for the library in the format that you prefer (Visual Studio projects, nmake makefiles, UNIX makefiles, Mac Xcode projects, ...) using CMake.
 
-    In this process you can use a graphical user interface for cmake such as `cmake-gui` in Unix/Mac OS X or `CMake-gui` in Windows, or a command-line interface such as `ccmake`. The process is explained here assuming this last possibility, as graphical user interfaces are not always available.
+    If you are _only_ interested in the shared-memory skeleton, which does not require MPI and Boost, run cmake with `-DONLY_THREADS=1`.
+
+    In this process you can use a graphical user interface for CMake such as `cmake-gui` in Unix/Mac OS X or `CMake-gui` in Windows, or a command-line interface such as `ccmake`. The process is explained here assuming this last possibility.
  
-5. run `ccmake ..`
+5. run `ccmake ..` or `ccmake -DONLY_THREADS=1 ..` depending on whether you are only interested in the parallelism based on threads.
 	
 	 This will generate the files for building Dparallel_recusion with the tool that cmake choses by default for your platform. Flag `-G` can be used to specify the kind of tool that you want to use. For example if you want to use Unix makefiles but they are not the default in you system, run <tt>ccmake -G 'Unix Makefiles' ..</tt>
 
@@ -65,6 +68,9 @@ Intel TBB must be configured before building or using Dparallel_recursion. This 
 	  
 	- `CMAKE_INSTALL_PREFIX` : Directory where Dparallel_recusion will be installed.
 
+   - `ONLY_THREADS` is a boolean whose meaning has already been explained
+   - `VALIDATE` is a boolean that when `ON` adds further validations to the benchmarks that can be quite slow for some of them.
+ 
 8. When you are done, press `c` to re-configure cmake with the new values.
 9. Press `g` to generate the files that will be used to build the benchmarks and tests for the library and exit cmake.
 10. The rest of this explanation assumes that UNIX makefiles were generated in the previous step. 
