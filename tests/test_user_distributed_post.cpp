@@ -21,6 +21,7 @@
 ///
 
 #include <cstdlib>
+#include <iostream>
 #include <algorithm>
 #include <tbb/task_scheduler_init.h>
 #include "dparallel_recursion/dparallel_recursion.h"

@@ -4,7 +4,7 @@ if( ${UNIX} AND (NOT (${APPLE})) )
   link_libraries( rt )
 endif( ${UNIX} AND (NOT (${APPLE})) )
 
-set( benchmarks fib NQueens quicksort strassen barnes_hut_loc )
+set( benchmarks fib NQueens quicksort strassen barnes_hut_loc fib_stack NQueens_stack quicksort_stack barnes_hut_loc_stack)
 
 foreach(benchmark ${benchmarks})
   add_executable( ${benchmark} ${benchmark}.cpp ${dprHeaders} )

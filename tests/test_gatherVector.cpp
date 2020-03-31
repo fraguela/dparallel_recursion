@@ -22,6 +22,7 @@
 ///
 
 #include <cstring>
+#include <iostream>
 #include <tbb/task_scheduler_init.h>
 #include <boost/serialization/array.hpp>
 #include "dparallel_recursion/dparallel_recursion.h"

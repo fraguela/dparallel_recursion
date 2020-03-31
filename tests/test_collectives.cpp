@@ -22,6 +22,7 @@
 ///
 
 #include <cstdlib>
+#include <iostream>
 #include <numeric>
 #include <algorithm>
 #include <tbb/task_scheduler_init.h>

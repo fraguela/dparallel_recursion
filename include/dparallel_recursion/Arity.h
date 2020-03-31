@@ -49,6 +49,10 @@ struct Arity {
         /// Level at which the tasks should become sequential
         mutable int parLevel_;
   
+        /// Number of threads
+        /// @internal Only useful for DynamicBalance's Balancer. Check num_threads() usages
+        const unsigned int nthreads_;
+  
         static constexpr int Nlevels(unsigned int t, int i, unsigned int ntasks) noexcept
         {
            return (t < ntasks) ? Nlevels(t * NCHILDREN, i+1, ntasks) : i;
@@ -61,12 +65,12 @@ struct Arity {
                                                  : Nlevels(1, 0, ntasks);
         }
 
-        constexpr Arity(int ntasks = std::thread::hardware_concurrency() * 2) noexcept :
-        ntasks_(ntasks), parLevel_(LevelsForNTasks(ntasks))
+        constexpr Arity(int ntasks = std::thread::hardware_concurrency() * 2, int nthreads = std::thread::hardware_concurrency()) noexcept :
+        ntasks_(ntasks), parLevel_(LevelsForNTasks(ntasks)), nthreads_(nthreads)
         { /* printf("%d -> ParLevel=%d\n", ntasks, parLevel_);*/ }
 
         constexpr Arity(const Arity<NCHILDREN>& other) noexcept :
-        ntasks_(other.ntasks_), parLevel_(other.parLevel_)
+        ntasks_(other.ntasks_), parLevel_(other.parLevel_), nthreads_(other.nthreads_)
         { }
   
         /// Provide the default number of children of the problem
@@ -80,6 +84,9 @@ struct Arity {
         static float cost(const T& t) noexcept {
           return 1.0f;
         }
+  
+        unsigned int num_threads() const noexcept { return nthreads_; }
+
 };
 
 
