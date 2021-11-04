@@ -13,7 +13,7 @@
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  See the License for the specific language governing permissions and
  limitations under the License.
- */
+*/
 
 ///
 /// \file     NQueens_stack.cpp
@@ -23,12 +23,11 @@
 ///
 
 
+#include <iostream>
+#include <sys/time.h>
 #include <cstdlib>
 #include <vector>
-#include <utility>
-#include <sys/time.h>
-#include <iostream>
-#include "dparallel_recursion/parallel_stack_recursion.h"
+#include <dparallel_recursion/parallel_stack_recursion.h>
 
 int nthreads = 8;
 int limitParallel = 768;
@@ -102,7 +101,8 @@ private:
 
 /// Info on structure of N Queens problem
 struct NQueensInfo : public dpr::Arity<0> {
-	//NQueensInfo() {}
+	NQueensInfo() : Arity<0>(nthreads, nthreads)
+	{}
 
 	bool is_base(const Board& b) const {
 		return b.row() == (b.N - 1);
@@ -118,7 +118,7 @@ struct NQueensInfo : public dpr::Arity<0> {
 		for (int i=0; i < b.row(); i++) {
 			tasks *= i ? (b.N - 1 - 2 * i) : b.N;
 		}
-		//printf("[row %d] %d > %d\n", b.row(), ntasks , tasks);
+		//std::cout << "[row " << b.row() << "] " << ntasks << " > " << tasks << std::endl;
 		return !is_base(b) && (ntasks > tasks);
 	}
 
@@ -132,17 +132,6 @@ struct NQueensBody : public dpr::EmptyBody<Board, int> {
 	int base(const Board& b) {
 		return b.numChildren();
 	}
-
-	/*int post(const Board& b, int* results) {
-		int nc = b.numChildren(); // In this problem it can be 0 sometimes
-		int r = 0;
-
-		while (nc) {
-			r += results[--nc];
-		}
-
-		return r;
-	}*/
 	
 	void post(const int& r, int& rr) {
 		rr += r;
@@ -152,7 +141,7 @@ struct NQueensBody : public dpr::EmptyBody<Board, int> {
 
 int Board::play(int boardsize, int chunkSize, int partitioner, const dpr::AutomaticChunkOptions &opt = dpr::aco_default, int test_boardsize = -1) {
 	//setN(boardsize);
-	if ((chunkSize > 0) or (test_boardsize > 0)) {
+	if ((chunkSize > 0) || (test_boardsize <= 0)) {
 		if (partitioner == 1) {
 			//_partitioner = 1 => custom
 			return dpr::parallel_stack_recursion<int>(Board(boardsize), NQueensInfo(), NQueensBody(), chunkSize, dpr::partitioner::custom());
@@ -195,24 +184,24 @@ std::vector<dpr::ResultChunkTest> Board::test(int boardsize, int chunkSize, int 
 
 #ifndef NO_VALIDATE
 int rec_nqueens(Board b) {
-  int num_children = b.numChildren();
-  if(b.row() == b.N - 1)
-    return num_children;
-  else {
-    int result = 0;
-    for(int i = 0; i < num_children; i++)
-      result += rec_nqueens(Board(b, i));
-    return result;
-  }
+	int num_children = b.numChildren();
+	if(b.row() == b.N - 1)
+		return num_children;
+	else {
+		int result = 0;
+		for(int i = 0; i < num_children; i++)
+			result += rec_nqueens(Board(b, i));
+		return result;
+	}
 }
 #endif
 
 int main(int argc, char** argv) {
 	struct timeval t0, t1, t;
-	int sols;
+	int sols = -1;
 	int problem_sz = 15;
 	int chunkSize = 8;	//10 is a great chunk size also
-	int stackSize = 500000;
+	int stackSize = 100;
 	int partitioner = 0;
 	int test_boardsize = -1;
 	bool runTests = false;
@@ -246,8 +235,9 @@ int main(int argc, char** argv) {
 	}
 
 	if (argc > 6) {
-		if (argv[6] != nullptr) {
-			test_boardsize = atoi(argv[6]);
+		test_boardsize = atoi(argv[6]);
+		if (test_boardsize <= 0) {
+			test_boardsize = problem_sz;
 		}
 	}
 

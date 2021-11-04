@@ -13,7 +13,7 @@
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  See the License for the specific language governing permissions and
  limitations under the License.
- */
+*/
 
 ///
 /// \file     quicksort_stack.cpp
@@ -22,34 +22,16 @@
 /// \author   Jose C. Cabaleiro   <jc.cabaleiro@usc.es>
 ///
 
-/*
- *  The initial input is only located in the root.
- *  The result is left distributed.
- */
-
+#include <iostream>
 #include <cstdlib>
 #include <algorithm>
 #include <sys/time.h>
 #include <vector>
-#include <utility>
-#include <iostream>
-#include "dparallel_recursion/parallel_stack_recursion.h"
+#include <dparallel_recursion/parallel_stack_recursion.h>
 
 size_t n = 100000000;
 int nthreads = 8;
-int limitParallel = 200000;
-
-/*
-#include <iostream>
- void print(int* a, int size) {
- for (int i = 0; i < size; i++) {
-   std::cout << a[i] << std::endl;
- }
-   std::cout << std::endl;
- }
-*/
-
-//namespace ser = boost::serialization;
+size_t limitParallel = 200000;
 
 struct range_t {
 
@@ -62,9 +44,7 @@ struct range_t {
 
 	range_t clone() {
 		int *newbegin = new int[size];
-		for (size_t i=0; i<size; i++) {
-			newbegin[i] = begin[i];
-		}
+		std::copy_n(begin, size, newbegin);
 		return range_t(newbegin, size);
 	}
 
@@ -107,36 +87,7 @@ partition:
 		//return range_t(begin + nchild * i, nchild ? (size - i) : j);
 		return nchild ? range_t(begin + i, size - i) : range_t(begin, i);
 	}
-  
-        /*
-	template<typename Archive>
-	void save(Archive &ar, const unsigned int) const {
-		ar & size;
-		ar & ser::make_array(begin, size);
-	}
 
-	template<typename Archive>
-	void load(Archive &ar, const unsigned int) {
-		ar & size;
-
-		if (!begin) {
-			begin = (int *)malloc(sizeof(int) * size);
-		}
-
-		ar & ser::make_array(begin, size);
-	}
-
-	BOOST_SERIALIZATION_SPLIT_MEMBER()
-        */
-  
-       template<class Archive>
-       void serialize(Archive & ar, const unsigned int version)
-       { }
-  
-       template<typename Archive>
-       void gather_scatter(Archive &ar) {
-                ar & begin & size;
-       }
 };
 
 struct QSinfo: public dpr::Arity<2> {
@@ -146,7 +97,6 @@ struct QSinfo: public dpr::Arity<2> {
   
   static bool is_base(const range_t &r) {
     //printf("%lu <= %lu (%d %d %d) = %d\n", r.size, (n / (4 * nthreads * nprocs * tasks_per_thread)), nthreads, nprocs, tasks_per_thread, (r.size <= (n / (4 * nthreads * nprocs * tasks_per_thread))));
-    //return r.size <= (n / (4 * nthreads * nprocs * tasks_per_thread));
     return r.size <= 10000;
   }
 
@@ -161,7 +111,7 @@ struct QSinfo: public dpr::Arity<2> {
   /*static float cost(const range_t &r) noexcept {
     return (float)r.size;
   }*/
-  
+
 };
 
 struct QS : public dpr::EmptyBody<range_t, void> {
@@ -181,28 +131,28 @@ int main(int argc, char **argv) {
 	struct timeval t0, t1, t;
 
 	int chunkSize = 1;
-    int stackSize = 500000;
-    int partitioner = 0;
-    size_t test_n = 0;
-    bool runTests = false;
+	int stackSize = 1000;
+	int partitioner = 0;
+	size_t test_n = 0;
+	bool runTests = false;
 	std::vector<dpr::ResultChunkTest> listChunks;
 	
 	if (getenv("OMP_NUM_THREADS")) {
 		nthreads = atoi(getenv("OMP_NUM_THREADS"));
 	}
-  
+
 	if (argc > 1) {
 		n = (size_t) strtoull(argv[1], NULL, 0);
 		test_n = n;
 	}
 
 	if (argc > 2) {
-        chunkSize = atoi(argv[2]);
-    }
-    
-    if (argc > 3) {
-        stackSize = atoi(argv[3]);
-    }
+		chunkSize = atoi(argv[2]);
+	}
+
+	if (argc > 3) {
+		stackSize = atoi(argv[3]);
+	}
 
 	if (argc > 4) {
 		partitioner = atoi(argv[4]);
@@ -210,12 +160,12 @@ int main(int argc, char **argv) {
 
 	if (partitioner == 1) {	//_partitioner = 1 => custom
 		if (argc > 5) {
-			limitParallel = atoi(argv[5]);
+			limitParallel = static_cast<size_t>(atoi(argv[5]));
 		}
 	}
 
 	if (argc > 6) {
-		if (argv[6] != nullptr) {
+		if (atoi(argv[6]) > 0) {
 			test_n = atoi(argv[6]);
 		}
 	}
@@ -280,7 +230,7 @@ int main(int argc, char **argv) {
 	
 	dpr::prs_init(nthreads, stackSize);
 	
-	int *data = new int[n]; //BBF: Actually only needed in root
+	int *data = new int[n];
 	srand(1234);
 	for (size_t i=0; i<n; i++) {
 		data[i] = rand();
@@ -288,7 +238,6 @@ int main(int argc, char **argv) {
 
 	range_t tmp(data, n);
 	QSinfo qsinfo;
-	//dparallel_recursion<void> (tmp, qsinfo, QS(), partitioner::automatic(), DistributedOutput|Scatter|UseCost);
 	if (!runTests) {
 		if (chunkSize > 0) {
 			gettimeofday(&t0, NULL);
@@ -303,9 +252,10 @@ int main(int argc, char **argv) {
 				dpr::parallel_stack_recursion<void> (tmp, qsinfo, QS(), chunkSize, dpr::partitioner::simple());
 			}
 		} else {
-			int *test_data = new int[test_n]; //BBF: Actually only needed in root
+			srand(1234);
+			int *test_data = new int[test_n];
 			for (size_t i=0; i<test_n; i++) {
-				test_data[i] = data[i];
+				test_data[i] = rand();
 			}
 			range_t tmp_test(test_data, test_n);
 			gettimeofday(&t0, NULL);
@@ -343,7 +293,14 @@ int main(int argc, char **argv) {
 	} else {
 		std::cout << " chunkSize=" << dpr::getPsrLastRunExtraInfo().chunkSizeUsed << "(auto)";
 	}
-	std::cout << " stackSize=" << stackSize << std::endl;
+	std::cout << " stackSize=" << stackSize << " partitioner=";
+	if (partitioner == 1) {
+		std::cout << "custom limitParallel=" << limitParallel << std::endl;
+	} else if (partitioner == 2) {
+		std::cout << "automatic" << std::endl;
+	} else {
+		std::cout << "simple" << std::endl;
+	}
 	if (!runTests) {
 		std::cout << "compute time: " << (t.tv_sec + t.tv_usec / 1000000.0) << std::endl;
 		if (chunkSize <= 0) {

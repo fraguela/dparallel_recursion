@@ -35,7 +35,7 @@
 #include <utility>
 #include <chrono>
 #include <dparallel_recursion/SRange.h>
-#include "dparallel_recursion/parallel_stack_recursion.h"
+#include <dparallel_recursion/parallel_stack_recursion.h>
 
 using namespace dpr;
 
@@ -516,7 +516,6 @@ void dump_positions(const char *filename)
 int main(int argc, char *argv[]) {
 	int stackSize = 500000;
 	int _partitioner = 0;		//0 = simple, 1 = custom, 2 = automatic. Default: simple
-	//int _childgeneration = 0;	//0 = normal, 1 = reference, 2 = normal_aux, 3 = reference_aux. Default: normal
 	int limitParallel = 8;
 
 	if (getenv("OMP_NUM_THREADS")) {

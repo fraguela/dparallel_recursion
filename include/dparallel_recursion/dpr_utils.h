@@ -13,7 +13,7 @@
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  See the License for the specific language governing permissions and
  limitations under the License.
- */
+*/
 
 ///
 /// \file     dpr_utils.h
@@ -203,7 +203,7 @@ struct AlignedBufferedAllocator {
 	T* aligned_alloc(std::size_t alignment = alignof(T)) {
 		if (std::align(alignment, sizeof(T), p, sz)) {
 			T* result = reinterpret_cast<T*>(p);
-                        new (result) T();
+			new (result) T();
 			p = (char*)p + sizeof(T);
 			sz -= sizeof(T);
 			return result;

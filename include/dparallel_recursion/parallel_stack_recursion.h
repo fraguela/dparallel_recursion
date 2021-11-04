@@ -1,13 +1,13 @@
 /*
  dparallel_recursion: distributed parallel_recursion skeleton
  Copyright (C) 2015-2020 Millan A. Martinez, Basilio B. Fraguela, Jose C. Cabaleiro. Universidade da Coruna
-
+ 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
-
+ 
  http://www.apache.org/licenses/LICENSE-2.0
-
+ 
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -81,10 +81,9 @@ inline std::exception_ptr& globalExceptionPtr() {
 
 template<typename T>
 struct StealStack {
-	int workAvail;                                      /* elements available for stealing, 4 bytes, shared variable */
 	int sharedStart;                                    /* index of start of shared portion of stack, 4 bytes, shared variable */
 	std::mutex stackLock;                               /* lock for manipulation of shared portion, 40 bytes, shared mutex */
-	char falseSharingPadding[64*((sizeof(int)*2+sizeof(std::mutex))/64+1)-sizeof(int)*2-sizeof(std::mutex)];                         /* 4*4=16 bytes padding */
+	char falseSharingPadding[64*((sizeof(int)+sizeof(std::mutex))/64+1)-sizeof(int)-sizeof(std::mutex)];                         /* 4*5=20 bytes padding */
 	//////////// 64 bytes ////////////
 	std::vector<T> stack;                               /* addr of actual stack of nodes in local addr space, 24 bytes */
 	unsigned long long int nNodes;                      /* number of nodes processed, 8 bytes */
@@ -152,7 +151,6 @@ public:
 		s->sharedStart = 0;
 		s->local  = 0;
 		s->top    = 0;
-		s->workAvail = 0;
 	}
 
 	static void ss_init(internal::StealStack<T> *s, const int nelts) {
@@ -445,12 +443,10 @@ public:
 
 	/* release k values from bottom of local stack */
 	void ss_release(internal::StealStack<T> *s, const int chunkSize) {
-		std::lock_guard<std::mutex> lck(s->stackLock);
 #if defined(PROFILE) || defined(DPR_ENABLE_CONSISTENCY_CHECKS)
 		if (s->top - s->local >= chunkSize) {
 #endif
 			s->local += chunkSize;
-			s->workAvail += chunkSize;
 			PROFILEACTION(s->nRelease++);
 #if defined(PROFILE) || defined(DPR_ENABLE_CONSISTENCY_CHECKS)
 		} else {
@@ -466,7 +462,6 @@ public:
 		std::lock_guard<std::mutex> lck(s->stackLock);
 		if ((s->local - s->sharedStart) >= chunkSize) {
 			s->local -= chunkSize;
-			s->workAvail -= chunkSize;
 			PROFILEACTION(s->nAcquire++);
 			return true;
 		} else {
@@ -494,10 +489,9 @@ public:
 #endif
 
 		/* lock victim stack and try to reserve chunkSize elts */
-
 		std::lock_guard<std::mutex> lck(stealStack[victim]->stackLock);
 
-		const int victimWorkAvail = stealStack[victim]->workAvail;
+		const int victimWorkAvail = stealStack[victim]->local - stealStack[victim]->sharedStart;
 
 		if (victimWorkAvail >= chunkSize) {
 			/* reserve a chunk */
@@ -509,7 +503,6 @@ public:
 			}
 #endif
 			stealStack[victim]->sharedStart = victimShared + chunkSize;
-			stealStack[victim]->workAvail -= chunkSize;
 
 			/* if k elts reserved, move them to local portion of our stack */
 			std::copy_n(stealStack[victim]->stack.begin() + victimShared, chunkSize, s->stack.begin()+ s->top);
@@ -527,7 +520,7 @@ public:
 	inline int findwork(const int chunkSize) {
 		for (int i = 1; i < num_total_threads; i++) {
 			const int v = (threadId + i) % num_total_threads;
-			if (stealStack[v]->workAvail >= chunkSize) {
+			if (stealStack[v]->local - stealStack[v]->sharedStart >= chunkSize) {
 				return v;
 			}
 		}
@@ -628,7 +621,6 @@ class start_stack_recursion {
 public:
 
 	static Return run(general_reference_wrapper<T> root, const Info& info, Body body, const int num_total_threads = std::thread::hardware_concurrency(), const int chunkSizeI = dpr::internal::defaultChunkSize, const AutomaticChunkOptions opt = dpr::aco_default, typename std::decay<T>::type * const rootTestV = nullptr) {
-		assert(chunkSizeI >= 0);
 		int chunkSize = chunkSizeI;
 		dpr::internal::lastPsrRunExtraInfo().chunkSize = chunkSize;
 		dpr::internal::lastPsrRunExtraInfo().nthreads = num_total_threads;
@@ -696,7 +688,6 @@ public:
 	}
 
 	static std::vector<dpr::ResultChunkTest> run_test(general_reference_wrapper<T> root, const Info& info, Body body, const int num_total_threads = std::thread::hardware_concurrency(), const int chunkSizeI = 0, const AutomaticChunkOptions opt = dpr::aco_test_default) {
-		assert(chunkSizeI >= 0);
 		std::vector<dpr::ResultChunkTest> res;
 		std::vector<Return> r(num_total_threads);
 		std::vector<unsigned long long int> nNodesArr(num_total_threads);
@@ -977,7 +968,11 @@ public:
 						}
 						if (!Partitioner::do_parallel(*data))  {
 							const int numChildren = info.num_children(*data);
+#ifdef DPR_FORCE_ORDER_R_TO_L
+							for (int i = numChildren-1; i >= 0; --i) {
+#else
 							for (int i = 0; i < numChildren; ++i) {
+#endif
 								do_it_serial_stack_struct<Return, T, Info, Body, Info::NumChildren>::do_it_serial(r, info.child(i, *data), info, body);
 							}
 							threadParStackClass.ss_pop(ss);
@@ -985,10 +980,17 @@ public:
 							const int numChildren = info.num_children(*data);
 							if (numChildren > 0) {
 								threadParStackClass.ss_checkStackSize(ss, numChildren, data);
+#ifdef DPR_FORCE_ORDER_L_TO_R
+								for (int i = numChildren-2; i >= 0; --i) {
+									threadParStackClass.ss_push_simple(ss, info.child(i, *data));
+								}
+								threadParStackClass.ss_setvalue_pos(ss, info.child(numChildren-1, *data), threadParStackClass.ss_topPosn(ss)-numChildren+1);
+#else
 								for (int i = 1; i < numChildren; ++i) {
 									threadParStackClass.ss_push_simple(ss, info.child(i, *data));
 								}
 								threadParStackClass.ss_setvalue_pos(ss, info.child(0, *data), threadParStackClass.ss_topPosn(ss)-numChildren+1);
+#endif
 								threadParStackClass.releaseMultipleNodes(ss);
 							} else {
 								threadParStackClass.ss_pop(ss);
@@ -1052,7 +1054,6 @@ public:
 
 			/* put root node on thread 0 stack */
 			if (threadId == 0) {
-				//threadParStackClass.ss_push_test(internal_psr::stealStack[0], root.get());
 				threadParStackClass.ss_push(internal_psr::stealStack[0], root.get());
 			}
 
@@ -1095,7 +1096,11 @@ public:
 						}
 						if (!Partitioner::do_parallel(*data))  {
 							const int numChildren = info.num_children(*data);
+#ifdef DPR_FORCE_ORDER_R_TO_L
+							for (int i = numChildren-1; i >= 0; --i) {
+#else
 							for (int i = 0; i < numChildren; ++i) {
+#endif
 								do_it_serial_stack_struct<Return, T, Info, Body, Info::NumChildren>::do_it_serial(r, info.child(i, *data), info, body);
 							}
 							threadParStackClass.ss_pop(ss);
@@ -1103,10 +1108,17 @@ public:
 							const int numChildren = info.num_children(*data);
 							if (numChildren > 0) {
 								threadParStackClass.ss_checkStackSize(ss, numChildren, data);
+#ifdef DPR_FORCE_ORDER_L_TO_R
+								for (int i = numChildren-2; i >= 0; --i) {
+									threadParStackClass.ss_push_simple(ss, info.child(i, *data));
+								}
+								threadParStackClass.ss_setvalue_pos(ss, info.child(numChildren-1, *data), threadParStackClass.ss_topPosn(ss)-numChildren+1);
+#else
 								for (int i = 1; i < numChildren; ++i) {
 									threadParStackClass.ss_push_simple(ss, info.child(i, *data));
 								}
 								threadParStackClass.ss_setvalue_pos(ss, info.child(0, *data), threadParStackClass.ss_topPosn(ss)-numChildren+1);
+#endif
 								threadParStackClass.releaseMultipleNodes(ss);
 							} else {
 								threadParStackClass.ss_pop(ss);
@@ -1514,18 +1526,29 @@ public:
 						}
 						if (!Partitioner::do_parallel(*data))  {
 							const int numChildren = info.num_children(*data);
+#ifdef DPR_FORCE_ORDER_R_TO_L
+							for (int i = numChildren-1; i >= 0; --i) {
+#else
 							for (int i = 0; i < numChildren; ++i) {
+#endif
 								do_it_serial_stack_struct<void, T, Info, Body, Info::NumChildren>::do_it_serial(info.child(i, *data), info, body);
 							}
 							threadParStackClass.ss_pop(ss);
 						} else {
 							const int numChildren = info.num_children(*data);
-							threadParStackClass.ss_checkStackSize(ss, numChildren, data);
 							if (numChildren > 0) {
+								threadParStackClass.ss_checkStackSize(ss, numChildren, data);
+#ifdef DPR_FORCE_ORDER_L_TO_R
+								for (int i = numChildren-2; i >= 0; --i) {
+									threadParStackClass.ss_push_simple(ss, info.child(i, *data));
+								}
+								threadParStackClass.ss_setvalue_pos(ss, info.child(numChildren-1, *data), threadParStackClass.ss_topPosn(ss)-numChildren+1);
+#else
 								for (int i = 1; i < numChildren; ++i) {
 									threadParStackClass.ss_push_simple(ss, info.child(i, *data));
 								}
 								threadParStackClass.ss_setvalue_pos(ss, info.child(0, *data), threadParStackClass.ss_topPosn(ss)-numChildren+1);
+#endif
 								threadParStackClass.releaseMultipleNodes(ss);
 							} else {
 								threadParStackClass.ss_pop(ss);
@@ -1587,7 +1610,6 @@ public:
 
 			/* put root node on thread 0 stack */
 			if (threadId == 0) {
-				//threadParStackClass.ss_push_test(internal_psr::stealStack[0], root.get());
 				threadParStackClass.ss_push(internal_psr::stealStack[0], root.get());
 			}
 
@@ -1630,18 +1652,29 @@ public:
 						}
 						if (!Partitioner::do_parallel(*data))  {
 							const int numChildren = info.num_children(*data);
+#ifdef DPR_FORCE_ORDER_R_TO_L
+							for (int i = numChildren-1; i >= 0; --i) {
+#else
 							for (int i = 0; i < numChildren; ++i) {
+#endif
 								do_it_serial_stack_struct<void, T, Info, Body, Info::NumChildren>::do_it_serial(info.child(i, *data), info, body);
 							}
 							threadParStackClass.ss_pop(ss);
 						} else {
 							const int numChildren = info.num_children(*data);
-							threadParStackClass.ss_checkStackSize(ss, numChildren, data);
 							if (numChildren > 0) {
+								threadParStackClass.ss_checkStackSize(ss, numChildren, data);
+#ifdef DPR_FORCE_ORDER_L_TO_R
+								for (int i = numChildren-2; i >= 0; --i) {
+									threadParStackClass.ss_push_simple(ss, info.child(i, *data));
+								}
+								threadParStackClass.ss_setvalue_pos(ss, info.child(numChildren-1, *data), threadParStackClass.ss_topPosn(ss)-numChildren+1);
+#else
 								for (int i = 1; i < numChildren; ++i) {
 									threadParStackClass.ss_push_simple(ss, info.child(i, *data));
 								}
 								threadParStackClass.ss_setvalue_pos(ss, info.child(0, *data), threadParStackClass.ss_topPosn(ss)-numChildren+1);
+#endif
 								threadParStackClass.releaseMultipleNodes(ss);
 							} else {
 								threadParStackClass.ss_pop(ss);
@@ -1723,7 +1756,7 @@ struct auto_stack_partitioner {
 
 	static bool do_parallel(T& data) noexcept {
 		//return r._level < (do_it_serial_stack_struct<Return, T, Info, Body, Info::NumChildren>::info->parLevel_); //BBF: LevelLimit;
-		return false;	//TODO: falta implementar esto
+		return false;	//TODO: maybe implement auto-partitioner in the future
 	}
 };
 
@@ -1854,21 +1887,21 @@ inline dpr::RunExtraInfo getPsrLastRunExtraInfo() {
 /// Facilitates the initialization of the parallel_stack_recursion environment
 template<typename T>
 inline void prs_init(const T nthreads) {
-  static_assert(std::is_integral<T>::value, "Integer required.");
-  dpr::internal::num_total_threads() = nthreads;
+	static_assert(std::is_integral<T>::value, "Integer required.");
+	dpr::internal::num_total_threads() = nthreads;
+	dpr::internal::initialStackSize() = dpr::INITIAL_STACKSIZE_DEFAULT;		//reset to default value
 }
 
 /// Facilitates the initialization of the parallel_stack_recursion environment
 template<typename T>
 inline void prs_init(const T nthreads, const int initial_stack_size) {
-  static_assert(std::is_integral<T>::value, "Integer required.");
-  assert(initial_stack_size > 0);
-  dpr::internal::num_total_threads() = nthreads;
-  dpr::internal::initialStackSize() = initial_stack_size;
+	static_assert(std::is_integral<T>::value, "Integer required.");
+	assert(initial_stack_size > 0);
+	dpr::internal::num_total_threads() = nthreads;
+	dpr::internal::initialStackSize() = initial_stack_size;
 }
 
 } // namespace dpr
 
 
 #endif /* DPR_PARALLEL_STACK_RECURSION_H_ */
-

@@ -37,7 +37,7 @@ public:
 	~EmptyBody() { }
 
 	Ret base(const T& t) { }
-	Ret non_base(const T& t) { return base(t); }
+	Ret non_base(const T& t) { }
 	void pre(const T& t) { }
 	void pre_rec(const T& t) { }
 	Ret post(const T& t, Ret* r) { }
@@ -55,7 +55,7 @@ public:
 	~EmptyBody() { }
 
 	void base(const T& t) { }
-	void non_base(const T& t) { base(t); }
+	void non_base(const T& t) { }
 	void pre(const T& t) { }
 	void pre_rec(const T& t) { }
 	void gather_input_post(const T& t, int n, T& root) { }

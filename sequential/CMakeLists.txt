@@ -1,6 +1,6 @@
-cmake_minimum_required( VERSION 2.6 )
+cmake_minimum_required( VERSION 2.8.11 )
 
-set( benchmarks fib NQueens quicksort strassen barnes_hut_loc )
+set( benchmarks fib NQueens quicksort strassen barnes_hut_loc knapsack floorplan topsorts )
 
 foreach(benchmark ${benchmarks})
   add_executable( ${benchmark}_seq ${benchmark}.cpp )
@@ -15,3 +15,4 @@ endif(NOT Boost_FOUND)
 add_subdirectory( treeadd )
 add_subdirectory( tsp )
 add_subdirectory( EP )
+add_subdirectory( uts )

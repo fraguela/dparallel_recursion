@@ -138,10 +138,18 @@ endif(NOT ONLY_THREADS)
  
 set( dprHeaders 
 	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/dparallel_recursion.h
+	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/dparallel_stack_recursion.h
 	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/parallel_recursion.h
+	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/parallel_stack_recursion.h
+	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/seq_parallel_recursion.h
+	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/seq_parallel_stack_recursion.h
+	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/ChunkSelector.h
 	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/general_reference_wrapper.h
+	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/DSParConfigInfo.h
 	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/dpr_utils.h
 	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/dpr_mpi_comm.h
+	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/dpr_mpi_comm_comm.h
+	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/dpr_mpi_stack_comm.h
 	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/dpr_mpi_gather_scatter.h
 	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/EmptyBody.h
 	${PROJECT_SOURCE_DIR}/include/dparallel_recursion/Arity.h

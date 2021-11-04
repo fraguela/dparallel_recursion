@@ -629,10 +629,10 @@ private:
           
           void operator() (int i) const {
             T& data = dinfo_.datatree[level_][i];
+            body_.pre(data);
             if(info_.is_base(data)) {
               ptr_startpos_vector_[i] = 1;
             } else {
-              body_.pre(data);
               body_.pre_rec(data);
               ptr_startpos_vector_[i] = info_.num_children(data);
             }
@@ -655,8 +655,10 @@ private:
             Datatree_level_t* const lv = &(dinfo_.lastTreeLevel());
             Datatree_level_t& last_level = *(lv - 1);
             T& tmp_ref = last_level[i].get();
+            body_.pre(tmp_ref);
             if(!info_.is_base(tmp_ref)) {
-              dinfo_.decompose<true>(tmp_ref, i * NCHILDREN, info_, body_, lv);
+              body_.pre_rec(tmp_ref);
+              dinfo_.decompose(tmp_ref, i * NCHILDREN, info_, lv);
             } else { //base cases in the middle of the decomposition are currently supported by generating T()
               //printf("[%d] had a base at level %d\n", rank, this->nLevels());
               (*lv)[i * NCHILDREN]= std::move(last_level[i]); //this leaves a hole (empty()) in the tree
@@ -699,17 +701,12 @@ private:
 
         };
   
-        template<bool RunPre, typename InfoTYPE, typename Body>
-        void decompose(T& data, int startpos, const InfoTYPE& info, Body& body, Datatree_level_t* lv)
+        template<typename InfoTYPE>
+        void decompose(T& data, const int startpos, const InfoTYPE& info, Datatree_level_t* const lv)
         {
-          if (RunPre) {
-            body.pre(data);
-            body.pre_rec(data);
-          }
-          
           //general_reference_wrapper<T> * const ptr = &((*lv)[0]) + startpos;
           
-          tbb::parallel_for(0, info.num_children(data), [&](int i) {
+          tbb::parallel_for(0, info.num_children(data), [&, startpos, lv](int i) {
             (*lv)[startpos + i] = general_reference_wrapper<T>(info.child(i, data));
           });
         }
@@ -773,8 +770,8 @@ public:
 
         /// \brief Constructor that specifies the number of tasks to generate per process when using automatic partitioning
         /// \param n Number of tasks to generate per process when using automatic partitioning
-        DInfo(int n, const BalanceParams& ibalanceParams = BalanceParams()) :
-		Arity<NCHILDREN>(n),
+        DInfo(int n, int nthreads = std::thread::hardware_concurrency(), const BalanceParams& ibalanceParams = BalanceParams()) :
+		Arity<NCHILDREN>(n, nthreads),
 		local_root(nullptr),
 		global_root(nullptr),
                 distribution_(ibalanceParams),
@@ -782,6 +779,16 @@ public:
                 gather_(nullptr)
         { }
 
+  /*
+        DInfo(int n, int nthreads, const BalanceParams& ibalanceParams = BalanceParams()) :
+		Arity<NCHILDREN>(n, nthreads),
+		local_root(nullptr),
+		global_root(nullptr),
+                distribution_(ibalanceParams),
+                scatter_(nullptr),
+                gather_(nullptr)
+  { }
+  */
         /// \brief Copy constructor
         DInfo(const DInfo<T, NCHILDREN>& other) :
 		Arity<NCHILDREN>(other),
@@ -915,11 +922,13 @@ public:
           while ( !distribution_.redistribute(info, this->lastTreeLevel()) ) {
 
             if (!level) {
+              body.pre(*global_root);
               if(info.is_base(*global_root)) {
                 break;
               } else  {
+                body.pre_rec(*global_root);
                 datatree.emplace_back(info.num_children(*global_root));
-                decompose<true>(iglobal_root, 0, info, body, &(this->lastTreeLevel()));
+                decompose(iglobal_root, 0, info, &(this->lastTreeLevel()));
               }
             } else {
               const int nelems_level = datatree[level].size();
@@ -948,14 +957,14 @@ public:
 
               /* The lambda breaks for g++ 4.7.2 in pluton
               tbb::parallel_for(0, nelems_level, [&, ptr_startpos_vector](int i) {
-                decompose<false>(datatree[level][i], ptr_startpos_vector[i], info, body, lv);
+                decompose(datatree[level][i], ptr_startpos_vector[i], info, lv);
               });
               */
               for (int i = 0; i < nelems_level; i++) {
                 if (nelems_vector[i] == 1) { //base case
                   (*lv)[startpos_vector[i]] = std::move(datatree[level][i]); //leaves a hole (empty()) in the tree
                 } else {
-                  decompose<false>(datatree[level][i], startpos_vector[i], info, body, lv);
+                  decompose(datatree[level][i], startpos_vector[i], info, lv);
                 }
               }
               

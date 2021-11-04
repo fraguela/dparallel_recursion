@@ -16,7 +16,9 @@ This library provides a framework to parallelize algorithms that follow a divide
 
 - The `dparallel_recursion` skeleton is described and compared with other alternatives in the publication [A general and efficient divide-and-conquer algorithm framework for multi-core clusters](http://www.des.udc.es/~basilio/papers/Gonzalez17-cluster.pdf) ([DOI 10.1007/s10586-017-0766-y](http://dx.doi.org/10.1007/s10586-017-0766-y)).
 
-- The `parallel_stack_recursion` skeleton is described and compared with other alternatives in the publication [A Divide-and-conquer Parallel Skeleton for Unbalanced and Deep Problems]
+- The `parallel_stack_recursion` skeleton is described and compared with other alternatives in the publication [A Parallel Skeleton for Divide-and-conquer Unbalanced and Deep Problems](http://www.des.udc.es/~basilio/papers/Martinez21-DaC.pdf) ([DOI 10.1007/s10766-021-00709-y](http://dx.doi.org/10.1007/s10766-021-00709-y)).
+
+- The `dparallel_stack_recursion` skeleton is described and compared with other alternatives in the publication "A highly optimized skeleton for Unbalanced and Deep Divide-and-conquer Algorithms on Multi-core Clusters", not yet published.
 
 ### License
 

@@ -1,19 +1,19 @@
 /*
  dparallel_recursion: distributed parallel_recursion skeleton
  Copyright (C) 2015-2020 Millan A. Martinez, Basilio B. Fraguela, Jose C. Cabaleiro. Universidade da Coruna
-
+ 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
-
+ 
  http://www.apache.org/licenses/LICENSE-2.0
-
+ 
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  See the License for the specific language governing permissions and
  limitations under the License.
- */
+*/
 
 ///
 /// \file     SRange.h
@@ -61,10 +61,10 @@ void psfor(const T& init, const T& end, const int chunkSize, const F&& fn) {
 /// @param init      starting value of the loop
 /// @param end       limit of the loop
 /// @param chunkSize the chunkSize parameter value
-/// @param fn        function that receives the iteration number and executes the associated iteration+
 /// @param dchunk    number of childs for each range division
+/// @param fn        function that receives the iteration number and executes the associated iteration+
 template<typename T, typename F>
-void psfor(const T& init, const T& end, const int chunkSize, const F&& fn, const int dchunk) {
+void psfor(const T& init, const T& end, const int chunkSize, const int dchunk, const F&& fn) {
 	dpr::SRange psr_tmp_range {init, end};
 	auto f = typename std::decay<F>::type(fn);
 	auto psr_tmp_func = [f](T var, const T& psr_pfor_end) {
@@ -194,8 +194,9 @@ auto psfor_reduce(const T& init, const T& end, const int chunkSize, const int dc
 /// @param end       limit of the loop
 /// @param chunkSize the chunkSize parameter value
 /// @param fn        function that receives the iteration number and executes the associated iteration
+/// @param auto_opt    AutomaticChunkOptions object with the test options
 template<int DCHUNK = 2, typename T, typename F>
-std::vector<dpr::ResultChunkTest> psfor_test(const T& init, const T& end, const int chunkSize, const F&& fn, const AutomaticChunkOptions& opt = dpr::aco_test_default) {
+std::vector<dpr::ResultChunkTest> psfor_test(const T& init, const T& end, const int chunkSize, const F&& fn, const AutomaticChunkOptions& auto_opt = dpr::aco_test_default) {
 	dpr::SRange psr_tmp_range {init, end};
 	auto f = typename std::decay<F>::type(fn);
 	auto psr_tmp_func = [f](T var, const T& psr_pfor_end) {
@@ -204,7 +205,7 @@ std::vector<dpr::ResultChunkTest> psfor_test(const T& init, const T& end, const 
 			++var;
 		}
 	};
-	return dpr::parallel_stack_recursion_test<void>(psr_tmp_range, dpr::SRangeInfo<DCHUNK>(), dpr::internal::make_generic_psr_for_body(psr_tmp_func), chunkSize, dpr::partitioner::simple(), opt);
+	return dpr::parallel_stack_recursion_test<void>(psr_tmp_range, dpr::SRangeInfo<DCHUNK>(), dpr::internal::make_generic_psr_for_body(psr_tmp_func), chunkSize, dpr::partitioner::simple(), auto_opt);
 }
 
 /// Template function to test the parallelizaton of a for loop on top of parallel_stack_recursion
@@ -212,10 +213,11 @@ std::vector<dpr::ResultChunkTest> psfor_test(const T& init, const T& end, const 
 /// @param init      starting value of the loop
 /// @param end       limit of the loop
 /// @param chunkSize the chunkSize parameter value
-/// @param fn        function that receives the iteration number and executes the associated iteration+
 /// @param dchunk    number of childs for each range division
+/// @param fn        function that receives the iteration number and executes the associated iteration+
+/// @param auto_opt    AutomaticChunkOptions object with the test options
 template<typename T, typename F>
-std::vector<dpr::ResultChunkTest> psfor_test(const T& init, const T& end, const int chunkSize, const F&& fn, const int dchunk, const AutomaticChunkOptions& opt = dpr::aco_test_default) {
+std::vector<dpr::ResultChunkTest> psfor_test(const T& init, const T& end, const int chunkSize, const int dchunk, const F&& fn, const AutomaticChunkOptions& auto_opt = dpr::aco_test_default) {
 	dpr::SRange psr_tmp_range {init, end};
 	auto f = typename std::decay<F>::type(fn);
 	auto psr_tmp_func = [f](T var, const T& psr_pfor_end) {
@@ -224,7 +226,7 @@ std::vector<dpr::ResultChunkTest> psfor_test(const T& init, const T& end, const 
 			++var;
 		}
 	};
-	return dpr::parallel_stack_recursion_test<void>(psr_tmp_range, dpr::SRangeInfo<0>(dchunk), dpr::internal::make_generic_psr_for_body(psr_tmp_func), chunkSize, dpr::partitioner::simple(), opt);
+	return dpr::parallel_stack_recursion_test<void>(psr_tmp_range, dpr::SRangeInfo<0>(dchunk), dpr::internal::make_generic_psr_for_body(psr_tmp_func), chunkSize, dpr::partitioner::simple(), auto_opt);
 }
 
 /// Template function to test the parallelizaton of a for loop on top of parallel_stack_recursion
@@ -235,8 +237,9 @@ std::vector<dpr::ResultChunkTest> psfor_test(const T& init, const T& end, const 
 /// @param chunkSize the chunkSize parameter value
 /// @param freducer  object such that <tt>a=freducer(a,b)</tt> reduces \c a and \c b into \c a
 /// @param fn        function that receives the iteration number and executes the associated iteration, returning the value to reduce
+/// @param auto_opt    AutomaticChunkOptions object with the test options
 template<int DCHUNK = 2, typename T, typename R, typename F>
-std::vector<dpr::ResultChunkTest> psfor_reduce_test(const T& init, const T& end, const int chunkSize, const R&& freducer, const F&& fn, const AutomaticChunkOptions& opt = dpr::aco_test_default) {
+std::vector<dpr::ResultChunkTest> psfor_reduce_test(const T& init, const T& end, const int chunkSize, const R&& freducer, const F&& fn, const AutomaticChunkOptions& auto_opt = dpr::aco_test_default) {
 
   using Result = typename std::result_of<F(T)>::type;
 
@@ -257,7 +260,7 @@ std::vector<dpr::ResultChunkTest> psfor_reduce_test(const T& init, const T& end,
     return tmp;
   };
 
-  return dpr::parallel_stack_recursion_test<Result>(psr_tmp_range, dpr::SRangeInfo<DCHUNK>(), dpr::internal::make_generic_psr_for_reduce_body<Result>(psr_tmp_func, reducer), chunkSize, dpr::partitioner::simple(), opt);
+  return dpr::parallel_stack_recursion_test<Result>(psr_tmp_range, dpr::SRangeInfo<DCHUNK>(), dpr::internal::make_generic_psr_for_reduce_body<Result>(psr_tmp_func, reducer), chunkSize, dpr::partitioner::simple(), auto_opt);
 }
 
 /// Template function to test the parallelizaton of a for loop on top of parallel_stack_recursion
@@ -268,8 +271,9 @@ std::vector<dpr::ResultChunkTest> psfor_reduce_test(const T& init, const T& end,
 /// @param dchunk    number of childs for each range division
 /// @param freducer  object such that <tt>a=freducer(a,b)</tt> reduces \c a and \c b into \c a
 /// @param fn        function that receives the iteration number and executes the associated iteration, returning the value to reduce
+/// @param auto_opt    AutomaticChunkOptions object with the test options
 template<typename T, typename R, typename F>
-std::vector<dpr::ResultChunkTest> psfor_reduce_test(const T& init, const T& end, const int chunkSize, const int dchunk, const R&& freducer, const F&& fn, const AutomaticChunkOptions& opt = dpr::aco_test_default) {
+std::vector<dpr::ResultChunkTest> psfor_reduce_test(const T& init, const T& end, const int chunkSize, const int dchunk, const R&& freducer, const F&& fn, const AutomaticChunkOptions& auto_opt = dpr::aco_test_default) {
 
   using Result = typename std::result_of<F(T)>::type;
 
@@ -290,7 +294,7 @@ std::vector<dpr::ResultChunkTest> psfor_reduce_test(const T& init, const T& end,
     return tmp;
   };
 
-  return dpr::parallel_stack_recursion_test<Result>(psr_tmp_range, dpr::SRangeInfo<0>(dchunk), dpr::internal::make_generic_psr_for_reduce_body<Result>(psr_tmp_func, reducer), chunkSize, dpr::partitioner::simple(), opt);
+  return dpr::parallel_stack_recursion_test<Result>(psr_tmp_range, dpr::SRangeInfo<0>(dchunk), dpr::internal::make_generic_psr_for_reduce_body<Result>(psr_tmp_func, reducer), chunkSize, dpr::partitioner::simple(), auto_opt);
 }
 
 /// Macro to test the parallelizaton of a for loop on top of parallel_recursion

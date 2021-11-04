@@ -48,6 +48,12 @@ struct RunExtraInfo {
 
 };
 
+#ifndef DPR_DENY_STACK_RESIZE
+const int INITIAL_STACKSIZE_DEFAULT = 1000;
+#else
+const int INITIAL_STACKSIZE_DEFAULT = 500000;
+#endif
+
 /*! \namespace internal
 *
 * \brief Contains the non-public implementation of the library
@@ -55,7 +61,7 @@ struct RunExtraInfo {
 */
 namespace internal {
 
-static constexpr int defaultChunkSize = 10;
+static constexpr int defaultChunkSize = 8;
 
 inline int& num_total_threads() {
    static int num_total_threads = std::thread::hardware_concurrency();
@@ -63,11 +69,7 @@ inline int& num_total_threads() {
 }
 
 inline int& initialStackSize() {
-#ifndef DPR_DENY_STACK_RESIZE
-	static int initialStackSize = 1000;
-#else
-	static int initialStackSize = 500000;
-#endif
+	static int initialStackSize = INITIAL_STACKSIZE_DEFAULT;
 	return initialStackSize;
 }
 
@@ -88,6 +90,15 @@ struct do_it_serial_stack_struct {
 
 	static void do_it_serial(Return& ret, T&& data, Body& body) { do_it_serial(ret, data, body); }
 	static void do_it_serial(Return& ret, T& data, Body& body) {
+		do_it_serial(ret, data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(Return& ret, T& data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data, ret), void() ) {
+		info->do_serial_func(data, ret);
+	}
+
+	static void do_it_serial(Return& ret, T& data, Body& body, const Info*, long) {
 		body.pre(data);
 
 		if (info->is_base(data)) {
@@ -97,7 +108,15 @@ struct do_it_serial_stack_struct {
           
 		body.pre_rec(data);
 
+		if (body.processNonBase) {
+			body.post(body.non_base(data), ret);
+		}
+
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		for (int i = I-1; i >= 0; --i) {
+#else
 		for (int i = 0; i < I; ++i) {
+#endif
 			do_it_serial(ret, info->child(i, data), body);
 		}
 
@@ -107,9 +126,17 @@ struct do_it_serial_stack_struct {
 	static void do_it_serial(Return& ret, T* data, const Info& info_in, Body& body) {
 		do_it_serial(ret, data, body);
 	}
+	static void do_it_serial(Return& ret, T* data, Body& body) {
+		do_it_serial(ret, data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(Return& ret, T* data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data, ret), void() ) {
+		info->do_serial_func(*data, ret);
+	}
 
 	//static void do_it_serial(Return& ret, T*& data, Body& body) { do_it_serial(ret, data, body); }
-	static void do_it_serial(Return& ret, T* data, Body& body) {
+	static void do_it_serial(Return& ret, T* data, Body& body, const Info*, long) {
 		body.pre(*data);
 
 		if (info->is_base(*data)) {
@@ -119,7 +146,15 @@ struct do_it_serial_stack_struct {
 
 		body.pre_rec(*data);
 
+		if (body.processNonBase) {
+			body.post(body.non_base(data), ret);
+		}
+
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		for (int i = I-1; i >= 0; --i) {
+#else
 		for (int i = 0; i < I; ++i) {
+#endif
 			T child;
 			info->child(i, *data, child);
 			do_it_serial(ret, &child, body);
@@ -143,6 +178,15 @@ struct do_it_serial_stack_struct<void, T, Info, Body, I> {
 
 	static void do_it_serial(T&& data, Body& body) { do_it_serial(data, body); }
 	static void do_it_serial(T& data, Body& body) {
+		do_it_serial(data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(T& data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data), void() ) {
+		info->do_serial_func(data);
+	}
+
+	static void do_it_serial(T& data, Body& body, const Info*, long) {
 		body.pre(data);
 
 		if (info->is_base(data)) {
@@ -151,8 +195,16 @@ struct do_it_serial_stack_struct<void, T, Info, Body, I> {
 		}
           
 		body.pre_rec(data);
-          
+
+		if (body.processNonBase) {
+			body.non_base(data);
+		}
+
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		for (int i = I-1; i >= 0; --i) {
+#else
 		for (int i = 0; i < I; ++i) {
+#endif
 			do_it_serial(info->child(i, data), body);
 		}
 	}
@@ -161,9 +213,17 @@ struct do_it_serial_stack_struct<void, T, Info, Body, I> {
 	static void do_it_serial(T* data, const Info& info_in, Body& body) {
 		do_it_serial(data, body);
 	}
+	static void do_it_serial(T* data, Body& body) {
+		do_it_serial(data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(T* data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data), void() ) {
+		info->do_serial_func(*data);
+	}
 
 	//static void do_it_serial(T*& data, Body& body) { do_it_serial(data, body); }
-	static void do_it_serial(T* data, Body& body) {
+	static void do_it_serial(T* data, Body& body, const Info*, long) {
 		body.pre(*data);
 
 		if (info->is_base(*data)) {
@@ -173,7 +233,15 @@ struct do_it_serial_stack_struct<void, T, Info, Body, I> {
 
 		body.pre_rec(*data);
 
+		if (body.processNonBase) {
+			body.post(body.non_base(data));
+		}
+
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		for (int i = I-1; i >= 0; --i) {
+#else
 		for (int i = 0; i < I; ++i) {
+#endif
 			T child;
 			info->child(i, *data, child);
 			do_it_serial(&child, body);
@@ -197,6 +265,15 @@ struct do_it_serial_stack_struct<Return, T, Info, Body, 0> {
 
 	static void do_it_serial(Return& ret, T&& data, Body& body) { do_it_serial(ret, data, body); }
 	static void do_it_serial(Return& ret, T& data, Body& body) {
+		do_it_serial(ret, data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(Return& ret, T& data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data, ret), void() ) {
+		info->do_serial_func(data, ret);
+	}
+
+	static void do_it_serial(Return& ret, T& data, Body& body, const Info*, long) {
 		body.pre(data);
 
 		if (info->is_base(data)) {
@@ -205,9 +282,17 @@ struct do_it_serial_stack_struct<Return, T, Info, Body, 0> {
 		}
 
 		body.pre_rec(data);
+
+		if (body.processNonBase) {
+			body.post(body.non_base(data), ret);
+		}
           
 		const int c = info->num_children(data);
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		for (int i = c-1; i >= 0; --i) {
+#else
 		for (int i = 0; i < c; ++i) {
+#endif
 			do_it_serial(ret, info->child(i, data), body);
 		}
 
@@ -217,9 +302,17 @@ struct do_it_serial_stack_struct<Return, T, Info, Body, 0> {
 	static void do_it_serial(Return& ret, T* data, const Info& info_in, Body& body) {
 		do_it_serial(ret, data, body);
 	}
+	static void do_it_serial(Return& ret, T* data, Body& body) {
+		do_it_serial(ret, data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(Return& ret, T* data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data, ret), void() ) {
+		info->do_serial_func(*data, ret);
+	}
 
 	//static void do_it_serial(Return& ret, T*& data, Body& body) { do_it_serial(ret, data, body); }
-	static void do_it_serial(Return& ret, T* data, Body& body) {
+	static void do_it_serial(Return& ret, T* data, Body& body, const Info*, long) {
 		body.pre(*data);
 
 		if (info->is_base(*data)) {
@@ -229,8 +322,16 @@ struct do_it_serial_stack_struct<Return, T, Info, Body, 0> {
 
 		body.pre_rec(*data);
 
+		if (body.processNonBase) {
+			body.post(body.non_base(data), ret);
+		}
+
 		const int c = info->num_children(*data);
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		for (int i = c-1; i >= 0; --i) {
+#else
 		for (int i = 0; i < c; ++i) {
+#endif
 			T child;
 			info->child(i, *data, child);
 			do_it_serial(ret, &child, body);
@@ -256,6 +357,15 @@ struct do_it_serial_stack_struct<void, T, Info, Body, 0> {
 
 	static void do_it_serial(T&& data, Body& body) { do_it_serial(data, body); }
 	static void do_it_serial(T& data, Body& body) {
+		do_it_serial(data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(T& data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data), void() ) {
+		info->do_serial_func(data);
+	}
+
+	static void do_it_serial(T& data, Body& body, const Info*, long) {
 		body.pre(data);
 
 		if (info->is_base(data)) {
@@ -264,10 +374,18 @@ struct do_it_serial_stack_struct<void, T, Info, Body, 0> {
 		}
           
 		body.pre_rec(data);
+
+		if (body.processNonBase) {
+			body.non_base(data);
+		}
           
 		const int c = info->num_children(data);
 
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		for (int i = c-1; i >= 0; --i) {
+#else
 		for (int i = 0; i < c; ++i) {
+#endif
 			do_it_serial(info->child(i, data), body);
 		}
 
@@ -277,9 +395,17 @@ struct do_it_serial_stack_struct<void, T, Info, Body, 0> {
 	static void do_it_serial(T* data, const Info& info_in, Body& body) {
 		do_it_serial(data, body);
 	}
+	static void do_it_serial(T* data, Body& body) {
+		do_it_serial(data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(T* data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data), void() ) {
+		info->do_serial_func(*data);
+	}
 
 	//static void do_it_serial(T*& data, Body& body) { do_it_serial(data, body); }
-	static void do_it_serial(T* data, Body& body) {
+	static void do_it_serial(T* data, Body& body, const Info*, long) {
 		body.pre(*data);
 
 		if (info->is_base(*data)) {
@@ -289,9 +415,17 @@ struct do_it_serial_stack_struct<void, T, Info, Body, 0> {
 
 		body.pre_rec(*data);
 
+		if (body.processNonBase) {
+			body.non_base(data);
+		}
+
 		const int c = info->num_children(*data);
 
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		for (int i = c-1; i >= 0; --i) {
+#else
 		for (int i = 0; i < c; ++i) {
+#endif
 			T child;
 			info->child(i, *data, child);
 			do_it_serial(&child, body);
@@ -316,6 +450,15 @@ struct do_it_serial_stack_struct<Return, T, Info, Body, 2> {
 
 	static void do_it_serial(Return& ret, T&& data, Body& body) { do_it_serial(ret, data, body); }
 	static void do_it_serial(Return& ret, T& data, Body& body) {
+		do_it_serial(ret, data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(Return& ret, T& data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data, ret), void() ) {
+		info->do_serial_func(data, ret);
+	}
+
+	static void do_it_serial(Return& ret, T& data, Body& body, const Info*, long) {
 		body.pre(data);
 
 		if (info->is_base(data)) {
@@ -324,8 +467,18 @@ struct do_it_serial_stack_struct<Return, T, Info, Body, 2> {
 		}
 
 		body.pre_rec(data);
+
+		if (body.processNonBase) {
+			body.post(body.non_base(data), ret);
+		}
+
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		do_it_serial(ret, info->child(1, data), body);
+		do_it_serial(ret, info->child(0, data), body);
+#else
 		do_it_serial(ret, info->child(0, data), body);
 		do_it_serial(ret, info->child(1, data), body);
+#endif
 
 	}
 
@@ -333,9 +486,17 @@ struct do_it_serial_stack_struct<Return, T, Info, Body, 2> {
 	static void do_it_serial(Return& ret, T* data, const Info& info_in, Body& body) {
 		do_it_serial(ret, data, body);
 	}
+	static void do_it_serial(Return& ret, T* data, Body& body) {
+		do_it_serial(ret, data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(Return& ret, T* data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data, ret), void() ) {
+		info->do_serial_func(*data, ret);
+	}
 
 	//static void do_it_serial(Return& ret, T*& data, Body& body) { do_it_serial(ret, data, body); }
-	static void do_it_serial(Return& ret, T* data, Body& body) {
+	static void do_it_serial(Return& ret, T* data, Body& body, const Info*, long) {
 		body.pre(*data);
 
 		if (info->is_base(*data)) {
@@ -344,12 +505,26 @@ struct do_it_serial_stack_struct<Return, T, Info, Body, 2> {
 		}
 
 		body.pre_rec(*data);
+
+		if (body.processNonBase) {
+			body.post(body.non_base(data), ret);
+		}
+
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		T child1;
+		info->child(1, *data, child1);
+		do_it_serial(ret, &child1, body);
+		T child0;
+		info->child(0, *data, child0);
+		do_it_serial(ret, &child0, body);
+#else
 		T child0;
 		info->child(0, *data, child0);
 		do_it_serial(ret, &child0, body);
 		T child1;
 		info->child(1, *data, child1);
 		do_it_serial(ret, &child1, body);
+#endif
 
 	}
 
@@ -371,6 +546,15 @@ struct do_it_serial_stack_struct<void, T, Info, Body, 2> {
 
 	static void do_it_serial(T&& data, Body& body) { do_it_serial(data, body); }
 	static void do_it_serial(T& data, Body& body) {
+		do_it_serial(data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(T& data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data), void() ) {
+		info->do_serial_func(data);
+	}
+
+	static void do_it_serial(T& data, Body& body, const Info*, long) {
 		body.pre(data);
 
 		if (info->is_base(data)) {
@@ -379,9 +563,18 @@ struct do_it_serial_stack_struct<void, T, Info, Body, 2> {
 		}
           
 		body.pre_rec(data);
-          
+
+		if (body.processNonBase) {
+			body.non_base(data);
+		}
+
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		do_it_serial(info->child(1, data), body);
+		do_it_serial(info->child(0, data), body);
+#else
 		do_it_serial(info->child(0, data), body);
 		do_it_serial(info->child(1, data), body);
+#endif
 
 	}
 
@@ -389,9 +582,17 @@ struct do_it_serial_stack_struct<void, T, Info, Body, 2> {
 	static void do_it_serial(T* data, const Info& info_in, Body& body) {
 		do_it_serial(data, body);
 	}
+	static void do_it_serial(T* data, Body& body) {
+		do_it_serial(data, body, info, 0);
+	}
+
+	template<typename InfoP>
+	static auto do_it_serial(T* data, Body& body, const InfoP infop, int) -> decltype( infop->do_serial_func(data), void() ) {
+		info->do_serial_func(*data);
+	}
 
 	//static void do_it_serial(T*& data, Body& body) { do_it_serial(data, body); }
-	static void do_it_serial(T* data, Body& body) {
+	static void do_it_serial(T* data, Body& body, const Info*, long) {
 		body.pre(*data);
 
 		if (info->is_base(*data)) {
@@ -401,12 +602,25 @@ struct do_it_serial_stack_struct<void, T, Info, Body, 2> {
 
 		body.pre_rec(*data);
 
+		if (body.processNonBase) {
+			body.non_base(data);
+		}
+
+#ifdef DPR_FORCE_ORDER_R_TO_L
+		T child1;
+		info->child(1, *data, child1);
+		do_it_serial(&child1, body);
+		T child0;
+		info->child(0, *data, child0);
+		do_it_serial(&child0, body);
+#else
 		T child0;
 		info->child(0, *data, child0);
 		do_it_serial(&child0, body);
 		T child1;
 		info->child(1, *data, child1);
 		do_it_serial(&child1, body);
+#endif
 
 	}
 };
@@ -438,7 +652,9 @@ struct simple {  };
 
 /// Request custom parallelization, controlled by the Info::do_parallel method
 struct custom {  };
+
 }
+
 #endif
 
 } // namespace dpr
